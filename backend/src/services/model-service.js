@@ -97,6 +97,27 @@ export async function deleteModel(projectId, id) {
 
   const interfaces = await interfaceRepo.listInterfaces(projectId);
   for (const api of interfaces) {
+    if ((api.kind || 'standard') === 'resource') {
+      if (collectRefs({ type: 'object', fields: api.resourceConfig?.fields || [] }).has(id)) {
+        throw new ValidationError('模型仍被引用，无法删除', [
+          {
+            path: 'id',
+            message: `模型 ${existing.name} 被资源集合「${api.name}」（${api.path}）的记录结构引用`,
+          },
+        ]);
+      }
+      for (const scenario of api.scenarios) {
+        if (collectRefs({ type: 'object', fields: scenario.response?.fields || [] }).has(id)) {
+          throw new ValidationError('模型仍被引用，无法删除', [
+            {
+              path: 'id',
+              message: `模型 ${existing.name} 被资源集合「${api.name}」的场景「${scenario.name}」引用`,
+            },
+          ]);
+        }
+      }
+      continue;
+    }
     if (collectRefs({ type: 'object', fields: api.defaultResponse.fields || [] }).has(id)) {
       throw new ValidationError('模型仍被引用，无法删除', [
         { path: 'id', message: `模型 ${existing.name} 被接口 ${api.name} 的默认响应引用` },

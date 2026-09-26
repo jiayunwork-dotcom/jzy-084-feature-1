@@ -1,8 +1,11 @@
 import { pool } from './pool.js';
 
+const SELECT_COLUMNS =
+  'id, project_id, name, path, method, default_response, scenarios, kind, resource_config, created_at, updated_at';
+
 export async function listInterfaces(projectId) {
   const { rows } = await pool.query(
-    `SELECT id, project_id, name, path, method, default_response, scenarios, created_at, updated_at
+    `SELECT ${SELECT_COLUMNS}
      FROM interfaces WHERE project_id = $1 ORDER BY created_at`,
     [projectId],
   );
@@ -11,7 +14,7 @@ export async function listInterfaces(projectId) {
 
 export async function getInterface(projectId, id) {
   const { rows } = await pool.query(
-    `SELECT id, project_id, name, path, method, default_response, scenarios, created_at, updated_at
+    `SELECT ${SELECT_COLUMNS}
      FROM interfaces WHERE project_id = $1 AND id = $2`,
     [projectId, id],
   );
@@ -20,9 +23,9 @@ export async function getInterface(projectId, id) {
 
 export async function createInterface(projectId, data) {
   const { rows } = await pool.query(
-    `INSERT INTO interfaces (project_id, name, path, method, default_response, scenarios)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, project_id, name, path, method, default_response, scenarios, created_at, updated_at`,
+    `INSERT INTO interfaces (project_id, name, path, method, default_response, scenarios, kind, resource_config)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING ${SELECT_COLUMNS}`,
     [
       projectId,
       data.name,
@@ -30,6 +33,8 @@ export async function createInterface(projectId, data) {
       data.method.toUpperCase(),
       JSON.stringify(data.defaultResponse),
       JSON.stringify(data.scenarios || []),
+      data.kind || 'standard',
+      data.resourceConfig ? JSON.stringify(data.resourceConfig) : null,
     ],
   );
   return deserializeInterface(rows[0]);
@@ -38,9 +43,9 @@ export async function createInterface(projectId, data) {
 export async function updateInterface(projectId, id, data) {
   const { rows } = await pool.query(
     `UPDATE interfaces SET name = $3, path = $4, method = $5,
-        default_response = $6, scenarios = $7, updated_at = now()
+        default_response = $6, scenarios = $7, kind = $8, resource_config = $9, updated_at = now()
      WHERE project_id = $1 AND id = $2
-     RETURNING id, project_id, name, path, method, default_response, scenarios, created_at, updated_at`,
+     RETURNING ${SELECT_COLUMNS}`,
     [
       projectId,
       id,
@@ -49,6 +54,8 @@ export async function updateInterface(projectId, id, data) {
       data.method.toUpperCase(),
       JSON.stringify(data.defaultResponse),
       JSON.stringify(data.scenarios || []),
+      data.kind || 'standard',
+      data.resourceConfig ? JSON.stringify(data.resourceConfig) : null,
     ],
   );
   return rows[0] ? deserializeInterface(rows[0]) : null;
@@ -68,10 +75,12 @@ export async function listInterfacesForMock(projectId) {
 }
 
 function deserializeInterface(row) {
-  const { default_response, ...rest } = row;
+  const { default_response, resource_config, ...rest } = row;
   return {
     ...rest,
+    kind: rest.kind || 'standard',
     defaultResponse: default_response ?? { fields: [] },
     scenarios: rest.scenarios ?? [],
+    resourceConfig: resource_config ?? null,
   };
 }

@@ -271,3 +271,68 @@ test('未定义的 Mock 路径返回 404', async () => {
   assert.equal(res.status, 404);
   assert.equal(res.data.error.code, 'MOCK_NOT_FOUND');
 });
+
+test('回归：资源集合占用的路径空间内不允许再建普通接口', async () => {
+  const res = await jsonFetch('/api/interfaces', {
+    method: 'POST',
+    body: {
+      name: '蹭资源路径',
+      path: '/api/users',
+      method: 'DELETE',
+      defaultResponse: { fields: [] },
+    },
+  });
+  // /api/users 目前没有资源集合，允许（与老行为一致）
+  assert.equal(res.status, 201, JSON.stringify(res.data));
+
+  const created = await jsonFetch('/api/interfaces', {
+    method: 'POST',
+    body: {
+      name: '订单资源',
+      path: '/api/orders',
+      method: 'GET',
+      kind: 'resource',
+      resourceConfig: {
+        fields: [{ name: 'id', type: 'number' }, { name: 'amount', type: 'number' }],
+        seedCount: 2,
+        idField: 'id',
+        pageSize: 10,
+      },
+    },
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.data));
+
+  const blocked = await jsonFetch('/api/interfaces', {
+    method: 'POST',
+    body: {
+      name: '订单某子路径',
+      path: '/api/orders/audit',
+      method: 'GET',
+      defaultResponse: { fields: [] },
+    },
+  });
+  assert.equal(blocked.status, 422);
+  assert.match(JSON.stringify(blocked.data.error.details), /资源集合/);
+});
+
+test('回归：资源集合记录结构引用的模型走同一套成环拦截', async () => {
+  const ca = await jsonFetch('/api/models', {
+    method: 'POST',
+    body: { name: 'RA', fields: [{ name: 'note', type: 'string' }] },
+  });
+  const cb = await jsonFetch('/api/models', {
+    method: 'POST',
+    body: { name: 'RB', fields: [{ name: 'note', type: 'string' }] },
+  });
+  await jsonFetch(`/api/models/${ca.data.id}`, {
+    method: 'PUT',
+    body: { name: 'RA', fields: [{ name: 'b', type: 'ref', ref: cb.data.id }] },
+  });
+  const closeLoop = await jsonFetch(`/api/models/${cb.data.id}`, {
+    method: 'PUT',
+    body: { name: 'RB', fields: [{ name: 'a', type: 'ref', ref: ca.data.id }] },
+  });
+  // 环在模型保存时即被拒绝，资源集合想引用也引用不到环
+  assert.equal(closeLoop.status, 422);
+  assert.equal(closeLoop.data.error.code, 'CIRCULAR_REFERENCE');
+});

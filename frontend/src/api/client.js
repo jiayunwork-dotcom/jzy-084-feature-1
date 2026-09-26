@@ -31,6 +31,9 @@ export const api = {
   createInterface: (body) => request('/api/interfaces', { method: 'POST', body }),
   updateInterface: (id, body) => request(`/api/interfaces/${id}`, { method: 'PUT', body }),
   deleteInterface: (id) => request(`/api/interfaces/${id}`, { method: 'DELETE' }),
+
+  getResourceState: (id) => request(`/api/interfaces/${id}/resource-state`),
+  resetResource: (id) => request(`/api/interfaces/${id}/resource-reset`, { method: 'POST' }),
 };
 
 /** Fire a real request at the generated mock endpoint. */
@@ -50,7 +53,7 @@ export async function callMock(method, apiPath, { query = '', headers = {}, body
   const text = await response.text();
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    parsed = text ? JSON.parse(text) : null;
   } catch {
     parsed = text;
   }
@@ -60,6 +63,8 @@ export async function callMock(method, apiPath, { query = '', headers = {}, body
       response.headers.get('x-mock-scenario') === 'default'
         ? null
         : decodeURIComponent(response.headers.get('x-mock-scenario') || 'default'),
+    mode: response.headers.get('x-mock-mode') || 'standard',
+    location: response.headers.get('location'),
     elapsed,
     data: parsed,
   };

@@ -24,6 +24,14 @@ export function mockRoutes(defaultProjectId) {
         'X-Mock-Scenario',
         result.matchedScenario ? encodeURIComponent(result.matchedScenario) : 'default',
       );
+      res.setHeader('X-Mock-Mode', result.mode || 'standard');
+      for (const [name, value] of Object.entries(result.headers || {})) {
+        res.setHeader(name, value);
+      }
+      if (result.status === 204) {
+        res.status(204).end();
+        return;
+      }
       res.status(result.status).json(result.body);
     } catch (err) {
       next(err);

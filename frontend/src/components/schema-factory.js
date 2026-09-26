@@ -41,7 +41,28 @@ export function createEmptyInterface() {
     name: '',
     path: '',
     method: 'GET',
+    kind: 'standard',
     defaultResponse: { fields: [createField('string')] },
+    scenarios: [],
+  };
+}
+
+export function createEmptyResource() {
+  return {
+    name: '',
+    path: '',
+    // Resource collections answer every method; GET is stored canonically.
+    method: 'GET',
+    kind: 'resource',
+    resourceConfig: {
+      fields: [
+        { ...createField('number'), name: 'id' },
+        { ...createField('string'), name: 'title' },
+      ],
+      seedCount: 5,
+      idField: 'id',
+      pageSize: 10,
+    },
     scenarios: [],
   };
 }

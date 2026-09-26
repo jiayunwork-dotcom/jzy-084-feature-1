@@ -8,6 +8,19 @@ import { ValidationError } from '../errors.js';
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const FIELD_TYPES = ['string', 'number', 'boolean', 'enum', 'array', 'object', 'ref'];
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+export const RESOURCE_KINDS = ['standard', 'resource'];
+
+export const RESOURCE_DEFAULTS = {
+  seedCount: 5,
+  idField: 'id',
+  pageSize: 10,
+};
+export const RESOURCE_LIMITS = {
+  seedCountMin: 0,
+  seedCountMax: 100,
+  pageSizeMin: 1,
+  pageSizeMax: 100,
+};
 
 /** Path must start with "/" and contain no "//" (and no whitespace). */
 export function validateApiPath(path, details) {
@@ -146,14 +159,104 @@ export function validateInterfaceInput(input, modelIds) {
   if (!input.name || !input.name.trim()) {
     details.push({ path: 'name', message: '接口名称不能为空' });
   }
-  const ctx = { modelIds };
-  if (!input.defaultResponse || !Array.isArray(input.defaultResponse.fields)) {
-    details.push({ path: 'defaultResponse.fields', message: '默认响应体字段定义缺失' });
-  } else {
-    validateFieldList(input.defaultResponse.fields, ctx, details, 'defaultResponse.fields');
+  const kind = input.kind || 'standard';
+  if (!RESOURCE_KINDS.includes(kind)) {
+    details.push({ path: 'kind', message: `接口形态不合法：${input.kind}` });
   }
+  const ctx = { modelIds };
+
+  if (kind === 'resource') {
+    validateResourceConfig(input, ctx, details);
+  } else {
+    if (!input.defaultResponse || !Array.isArray(input.defaultResponse.fields)) {
+      details.push({ path: 'defaultResponse.fields', message: '默认响应体字段定义缺失' });
+    } else {
+      validateFieldList(input.defaultResponse.fields, ctx, details, 'defaultResponse.fields');
+    }
+    for (const [index, scenario] of (input.scenarios || []).entries()) {
+      validateScenario(scenario, ctx, details, index);
+    }
+  }
+  failIfAny(details);
+}
+
+/**
+ * Resource-collection config: { fields, seedCount?, idField?, pageSize? }.
+ * The record shape is a plain field tree (public-model refs allowed) and is
+ * validated by the exact same rules as any other field list — including
+ * dangling refs; model-vs-model cycles stay rejected on model save.
+ */
+export function validateResourceInput(input, modelIds) {
+  const details = [];
+  validateApiPath(input.path, details);
+  validateMethod(input.method, details);
+  if (!input.name || !input.name.trim()) {
+    details.push({ path: 'name', message: '接口名称不能为空' });
+  }
+  validateResourceConfig(input, { modelIds }, details);
+  failIfAny(details);
+}
+
+function validateResourceConfig(input, ctx, details) {
+  const config = input.resourceConfig || {};
+  if (!Array.isArray(config.fields)) {
+    details.push({ path: 'resourceConfig.fields', message: '资源集合缺少记录字段结构' });
+  } else {
+    validateFieldList(config.fields, ctx, details, 'resourceConfig.fields');
+  }
+
+  // A resource collection occupies a static base path (item routes are
+  // derived as base/:id); :param segments are not allowed here.
+  if (typeof input.path === 'string' && input.path.startsWith('/') && !input.path.includes('//')) {
+    if (input.path === '/') {
+      details.push({
+        path: 'path',
+        message: '资源集合基础路径不能是根路径 /（将接管所有路径）',
+      });
+    }
+    if (input.path.includes(':')) {
+      details.push({
+        path: 'path',
+        message: `资源集合路径必须是静态基础路径（不带路径参数），当前为：${input.path}`,
+      });
+    }
+    if (input.path.endsWith('/') && input.path !== '/') {
+      details.push({ path: 'path', message: `资源集合路径不允许以斜杠结尾：${input.path}` });
+    }
+  }
+
+  if (config.seedCount !== undefined) {
+    if (!Number.isInteger(config.seedCount)
+      || config.seedCount < RESOURCE_LIMITS.seedCountMin
+      || config.seedCount > RESOURCE_LIMITS.seedCountMax) {
+      details.push({
+        path: 'resourceConfig.seedCount',
+        message: `初始记录数必须是 ${RESOURCE_LIMITS.seedCountMin}~${RESOURCE_LIMITS.seedCountMax} 的整数`,
+      });
+    }
+  }
+  if (config.pageSize !== undefined) {
+    if (!Number.isInteger(config.pageSize)
+      || config.pageSize < RESOURCE_LIMITS.pageSizeMin
+      || config.pageSize > RESOURCE_LIMITS.pageSizeMax) {
+      details.push({
+        path: 'resourceConfig.pageSize',
+        message: `每页条数必须是 ${RESOURCE_LIMITS.pageSizeMin}~${RESOURCE_LIMITS.pageSizeMax} 的整数`,
+      });
+    }
+  }
+  if (config.idField !== undefined) {
+    if (!config.idField || !IDENTIFIER_PATTERN.test(config.idField)) {
+      details.push({
+        path: 'resourceConfig.idField',
+        message: `标识字段名必须为合法标识符，当前为：${JSON.stringify(config.idField)}`,
+      });
+    }
+  }
+
+  // Scenarios stay legal on resource collections; they take precedence over
+  // collection read/write semantics when they match.
   for (const [index, scenario] of (input.scenarios || []).entries()) {
     validateScenario(scenario, ctx, details, index);
   }
-  failIfAny(details);
 }

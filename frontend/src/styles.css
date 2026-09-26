@@ -319,3 +319,81 @@ pre.structure-view {
   padding: 20px 0;
   text-align: center;
 }
+
+/* resource collection console */
+.kind-switch {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.kind-switch button {
+  flex: 1;
+  padding: 10px 12px;
+}
+
+.resource-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .resource-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.collection-live {
+  margin-bottom: 0;
+}
+
+.op-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: #fafcff;
+}
+
+.op-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.record-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.record-table th,
+.record-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.record-table td code {
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+label strong,
+label.strong {
+  color: var(--text);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+

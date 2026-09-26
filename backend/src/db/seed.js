@@ -124,4 +124,34 @@ export async function seedDemoData(projectId) {
       JSON.stringify([]),
     ],
   );
+
+  // A stateful resource collection: seeded once at startup, then read/written
+  // like a real backend (list / detail / create / update / delete / reset).
+  const articleFields = [
+    { id: 'ar1', name: 'id', type: 'number' },
+    { id: 'ar2', name: 'title', type: 'string' },
+    { id: 'ar3', name: 'author', type: 'string' },
+    { id: 'ar4', name: 'email', type: 'string' },
+    { id: 'ar5', name: 'category', type: 'enum', values: ['tech', 'life', 'news'] },
+    { id: 'ar6', name: 'viewCount', type: 'number', min: 0, max: 9999 },
+    { id: 'ar7', name: 'published', type: 'boolean' },
+  ];
+  const resourceConfig = {
+    fields: articleFields,
+    seedCount: 5,
+    idField: 'id',
+    pageSize: 10,
+  };
+  await pool.query(
+    `INSERT INTO interfaces
+       (project_id, name, path, method, default_response, scenarios, kind, resource_config)
+     VALUES ($1, $2, $3, 'GET', $4, '[]', 'resource', $5)`,
+    [
+      projectId,
+      '文章资源集合',
+      '/api/articles',
+      JSON.stringify({ fields: articleFields }),
+      JSON.stringify(resourceConfig),
+    ],
+  );
 }

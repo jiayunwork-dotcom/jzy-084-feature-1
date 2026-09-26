@@ -9,6 +9,19 @@ export function createApp(defaultProjectId) {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
 
+  // Malformed JSON bodies are a client error, not an internal error.
+  app.use((err, req, res, next) => {
+    if (err?.type === 'entity.parse.failed' || err?.type === 'entity.too.large') {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_REQUEST_BODY',
+          message: `请求体不是合法的 JSON：${err.message}`,
+        },
+      });
+    }
+    return next(err);
+  });
+
   app.use((req, res, next) => {
     req.projectId = defaultProjectId;
     next();
