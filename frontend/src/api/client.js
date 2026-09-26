@@ -31,6 +31,13 @@ export const api = {
   createInterface: (body) => request('/api/interfaces', { method: 'POST', body }),
   updateInterface: (id, body) => request(`/api/interfaces/${id}`, { method: 'PUT', body }),
   deleteInterface: (id) => request(`/api/interfaces/${id}`, { method: 'DELETE' }),
+
+  listCollections: () => request('/api/collections'),
+  getCollection: (id) => request(`/api/collections/${id}`),
+  createCollection: (body) => request('/api/collections', { method: 'POST', body }),
+  updateCollection: (id, body) => request(`/api/collections/${id}`, { method: 'PUT', body }),
+  deleteCollection: (id) => request(`/api/collections/${id}`, { method: 'DELETE' }),
+  resetCollection: (id) => request(`/api/collections/${id}/reset`, { method: 'POST' }),
 };
 
 /** Fire a real request at the generated mock endpoint. */

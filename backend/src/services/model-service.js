@@ -3,6 +3,7 @@ import { validateModelInput } from './validator.js';
 import { findNamedCycles, collectRefs } from './cycle-detector.js';
 import * as modelRepo from '../db/model-repo.js';
 import * as interfaceRepo from '../db/interface-repo.js';
+import * as collectionRepo from '../db/collection-repo.js';
 
 export async function listModels(projectId) {
   return modelRepo.listModels(projectId);
@@ -108,6 +109,22 @@ export async function deleteModel(projectId, id) {
           { path: 'id', message: `模型 ${existing.name} 被接口 ${api.name} 的场景「${scenario.name}」引用` },
         ]);
       }
+    }
+  }
+
+  // Resource collections referencing the model (as record schema or nested
+  // inside an inline schema) also block deletion — same dangling-ref rule.
+  const collections = await collectionRepo.listCollections(projectId);
+  for (const collection of collections) {
+    const schema = collection.recordSchema || {};
+    const directRef = schema.source === 'model' && schema.modelId === id;
+    const nestedRef =
+      schema.source === 'inline'
+      && collectRefs({ type: 'object', fields: schema.fields || [] }).has(id);
+    if (directRef || nestedRef) {
+      throw new ValidationError('模型仍被引用，无法删除', [
+        { path: 'id', message: `模型 ${existing.name} 被资源集合「${collection.name}」的记录结构引用` },
+      ]);
     }
   }
 

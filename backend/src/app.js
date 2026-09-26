@@ -1,8 +1,8 @@
 import express from 'express';
-import { ValidationError, NotFoundError } from './errors.js';
 import { modelRoutes } from './routes/models.js';
 import { interfaceRoutes } from './routes/interfaces.js';
 import { projectRoutes } from './routes/projects.js';
+import { collectionRoutes } from './routes/collections.js';
 import { mockRoutes } from './routes/mock.js';
 
 export function createApp(defaultProjectId) {
@@ -18,6 +18,7 @@ export function createApp(defaultProjectId) {
   app.use('/api/projects', projectRoutes(defaultProjectId));
   app.use('/api/models', modelRoutes());
   app.use('/api/interfaces', interfaceRoutes());
+  app.use('/api/collections', collectionRoutes());
   app.use('/mock', mockRoutes(defaultProjectId));
 
   app.use((req, res) => {
@@ -28,7 +29,10 @@ export function createApp(defaultProjectId) {
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
-    if (err instanceof ValidationError || err instanceof NotFoundError) {
+    // Every structured error exposes `status` + `toJSON()` (duck typing keeps
+    // ValidationError/NotFoundError/BadRequestError/ResourceNotFoundError all
+    // on the same rendering path).
+    if (err && Number.isInteger(err.status) && typeof err.toJSON === 'function') {
       return res.status(err.status).json(err.toJSON());
     }
     console.error(err);

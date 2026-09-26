@@ -1,8 +1,10 @@
 import { pool } from './pool.js';
+import { createCollection } from '../services/collection-service.js';
 
 /**
- * Seed a small, instantly-usable demo (Address + User models and two
- * interfaces) only when the project has no definitions yet.
+ * Seed a small, instantly-usable demo (Address + User models, two stateless
+ * interfaces, and one stateful resource collection) only when the project
+ * has no definitions yet.
  */
 export async function seedDemoData(projectId) {
   const { rows } = await pool.query(
@@ -124,4 +126,23 @@ export async function seedDemoData(projectId) {
       JSON.stringify([]),
     ],
   );
+
+  // 演示资源集合：有状态的 /api/articles，种入 6 条文章记录，
+  // author 字段引用 User 模型（生成时多层展开，种入后固定）。
+  await createCollection(projectId, {
+    name: '文章列表',
+    basePath: '/api/articles',
+    seedCount: 6,
+    recordSchema: {
+      source: 'inline',
+      fields: [
+        { id: 't1', name: 'title', type: 'string' },
+        { id: 't2', name: 'summary', type: 'string' },
+        { id: 't3', name: 'views', type: 'number', min: 0, max: 10000 },
+        { id: 't4', name: 'status', type: 'enum', values: ['draft', 'published', 'archived'] },
+        { id: 't5', name: 'published', type: 'boolean' },
+        { id: 't6', name: 'author', type: 'ref', ref: userId },
+      ],
+    },
+  });
 }

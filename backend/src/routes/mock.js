@@ -24,6 +24,16 @@ export function mockRoutes(defaultProjectId) {
         'X-Mock-Scenario',
         result.matchedScenario ? encodeURIComponent(result.matchedScenario) : 'default',
       );
+      if (result.headers) {
+        for (const [name, value] of Object.entries(result.headers)) {
+          res.setHeader(name, value);
+        }
+      }
+      // 204 (and other empty-body statuses) must be sent without a payload.
+      if (result.status === 204 || result.body === null || result.body === undefined) {
+        res.status(result.status).end();
+        return;
+      }
       res.status(result.status).json(result.body);
     } catch (err) {
       next(err);

@@ -1,8 +1,10 @@
 import { NotFoundError } from '../errors.js';
 import { validateInterfaceInput } from './validator.js';
 import { assertPathMethodUnique } from './uniqueness.js';
+import { assertNoCollectionInterfaceConflict } from './collection-footprint.js';
 import * as interfaceRepo from '../db/interface-repo.js';
 import * as modelRepo from '../db/model-repo.js';
+import * as collectionRepo from '../db/collection-repo.js';
 
 export async function listInterfaces(projectId) {
   return interfaceRepo.listInterfaces(projectId);
@@ -24,6 +26,9 @@ async function prepareInput(projectId, input, excludeId = null) {
   validateInterfaceInput(normalized, new Set(models.map((m) => m.id)));
   const existing = await interfaceRepo.listInterfaces(projectId);
   assertPathMethodUnique(existing, normalized, excludeId);
+  // Ordinary interfaces must not intrude into a collection's route subtree.
+  const collections = await collectionRepo.listCollections(projectId);
+  assertNoCollectionInterfaceConflict(collections, normalized);
   return normalized;
 }
 

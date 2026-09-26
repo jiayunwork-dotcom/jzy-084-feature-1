@@ -2,13 +2,21 @@ import * as interfaceRepo from '../db/interface-repo.js';
 import { generateNode } from './data-generator.js';
 import { selectScenario } from './scenario-matcher.js';
 import { getModelMap } from '../services/model-service.js';
+import { dispatchCollection } from './collection-dispatcher.js';
 
 /**
  * Mock request dispatcher.
  *
- * Looks up the interface by method + path pattern (:param segments match any
- * single non-slash segment), evaluates scenarios in declared order, and
- * generates data from the first match (or the default response).
+ * Two interface shapes share the /mock surface:
+ *  1. stateful resource collections — persistent record sets with real
+ *     list/detail/create/update/delete semantics (see collection-dispatcher);
+ *  2. ordinary stateless interfaces — scenarios are evaluated in declared
+ *     order and data is freshly generated from the first match (or the
+ *     default response).
+ *
+ * Their path spaces are mutually exclusive (validated at save time), so
+ * collection routing is attempted first and ordinary interfaces never see
+ * collection paths.
  */
 
 export function pathToRegExp(pathTemplate) {
@@ -41,6 +49,12 @@ export async function findMatchingInterface(projectId, method, pathname) {
 export async function dispatch(projectId, request) {
   const method = request.method;
   const pathname = request.path;
+
+  // 1. Stateful resource collections own their whole path subtree.
+  const collectionResult = await dispatchCollection(projectId, request);
+  if (collectionResult) return collectionResult;
+
+  // 2. Ordinary stateless interfaces: method + path-pattern lookup.
   const api = await findMatchingInterface(projectId, method, pathname);
   if (!api) {
     return {

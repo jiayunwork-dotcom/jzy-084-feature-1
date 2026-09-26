@@ -26,6 +26,21 @@ export function validateApiPath(path, details) {
   }
 }
 
+/**
+ * Collection base paths follow the same rules as interface paths and are
+ * additionally static: id segments are materialized by the collection router
+ * as `basePath/:id`, so declaring parameters or a trailing slash is invalid.
+ */
+export function validateCollectionPath(path, details) {
+  validateApiPath(path, details);
+  if (typeof path === 'string' && path !== '/' && path.endsWith('/')) {
+    details.push({ path: 'basePath', message: `集合路径不允许以斜杠结尾：${path}` });
+  }
+  if (typeof path === 'string' && path.split('/').some((segment) => segment.startsWith(':'))) {
+    details.push({ path: 'basePath', message: `集合路径必须是静态路径，不允许参数段（:xxx）：${path}` });
+  }
+}
+
 export function validateMethod(method, details) {
   const normalized = typeof method === 'string' ? method.toUpperCase() : method;
   if (!METHODS.includes(normalized)) {
@@ -82,7 +97,7 @@ function validateField(field, ctx, details, prefix) {
   }
 }
 
-function validateFieldList(fields, ctx, details, prefix = 'fields') {
+export function validateFieldList(fields, ctx, details, prefix = 'fields') {
   if (!Array.isArray(fields)) {
     details.push({ path: prefix, message: '字段列表必须是数组' });
     return;
@@ -154,6 +169,53 @@ export function validateInterfaceInput(input, modelIds) {
   }
   for (const [index, scenario] of (input.scenarios || []).entries()) {
     validateScenario(scenario, ctx, details, index);
+  }
+  failIfAny(details);
+}
+
+/**
+ * Resource collection definition validation. The record schema reuses the
+ * exact same field-tree rules as interface responses, including the rule
+ * that model refs must point at existing models.
+ */
+export function validateCollectionInput(input, modelIds) {
+  const details = [];
+  validateCollectionPath(input.basePath, details);
+  if (!input.name || !input.name.trim()) {
+    details.push({ path: 'name', message: '集合名称不能为空' });
+  }
+  if (
+    !Number.isInteger(input.seedCount) ||
+    input.seedCount < 0 ||
+    input.seedCount > 200
+  ) {
+    details.push({ path: 'seedCount', message: '种子条数必须是 0~200 之间的整数' });
+  }
+
+  const schema = input.recordSchema;
+  const ctx = { modelIds };
+  if (!schema || typeof schema !== 'object') {
+    details.push({ path: 'recordSchema', message: '记录结构缺失' });
+  } else if (schema.source === 'inline') {
+    if (!Array.isArray(schema.fields)) {
+      details.push({ path: 'recordSchema.fields', message: '记录结构缺少字段列表' });
+    } else {
+      validateFieldList(schema.fields, ctx, details, 'recordSchema.fields');
+    }
+  } else if (schema.source === 'model') {
+    if (!schema.modelId) {
+      details.push({ path: 'recordSchema.modelId', message: '未选择作为记录结构的公共模型' });
+    } else if (!modelIds.has(schema.modelId)) {
+      details.push({
+        path: 'recordSchema.modelId',
+        message: `记录结构引用了不存在的模型：${schema.modelId}`,
+      });
+    }
+  } else {
+    details.push({
+      path: 'recordSchema.source',
+      message: `记录结构来源必须是 inline 或 model：${JSON.stringify(schema.source)}`,
+    });
   }
   failIfAny(details);
 }
