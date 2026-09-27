@@ -124,4 +124,64 @@ export async function seedDemoData(projectId) {
       JSON.stringify([]),
     ],
   );
+
+  // ---- 演示资源集合：联系人（有状态的增删改查） ----
+  const { rows: contactRows } = await pool.query(
+    `INSERT INTO models (project_id, name, fields) VALUES ($1, 'Contact', $2) RETURNING id`,
+    [
+      projectId,
+      JSON.stringify([
+        { id: 'ct1', name: 'contactName', type: 'string' },
+        { id: 'ct2', name: 'phone', type: 'string' },
+        { id: 'ct3', name: 'email', type: 'string' },
+        { id: 'ct4', name: 'companyName', type: 'string' },
+        { id: 'ct5', name: 'address', type: 'string' },
+        { id: 'ct6', name: 'level', type: 'enum', values: ['A', 'B', 'C'] },
+      ]),
+    ],
+  );
+  const contactId = contactRows[0].id;
+
+  const contactCollection = JSON.stringify({
+    collectionKey: 'contacts',
+    idField: 'id',
+    seedCount: 5,
+    record: { type: 'ref', ref: contactId },
+  });
+  const emptyResponse = JSON.stringify({ fields: [] });
+  const contactEndpoints = [
+    { name: '联系人列表', path: '/api/contacts', method: 'GET' },
+    { name: '联系人详情', path: '/api/contacts/:id', method: 'GET' },
+    { name: '新建联系人', path: '/api/contacts', method: 'POST' },
+    { name: '整体替换联系人', path: '/api/contacts/:id', method: 'PUT' },
+    { name: '局部修改联系人', path: '/api/contacts/:id', method: 'PATCH' },
+    { name: '删除联系人', path: '/api/contacts/:id', method: 'DELETE' },
+  ];
+  for (const endpoint of contactEndpoints) {
+    // 列表端点附带一个演示场景：?simulate=error 时场景优先于集合读写。
+    const scenarios =
+      endpoint.method === 'GET' && endpoint.path === '/api/contacts'
+        ? JSON.stringify([
+            {
+              id: 'sc-contact-error',
+              name: '模拟服务异常',
+              statusCode: 500,
+              conditions: [
+                { id: 'c1', location: 'query', field: 'simulate', operator: 'eq', value: 'error' },
+              ],
+              response: {
+                fields: [
+                  { id: 'e1', name: 'code', type: 'number', min: 500, max: 500 },
+                  { id: 'e2', name: 'message', type: 'string' },
+                ],
+              },
+            },
+          ])
+        : JSON.stringify([]);
+    await pool.query(
+      `INSERT INTO interfaces (project_id, name, path, method, kind, collection, default_response, scenarios)
+       VALUES ($1, $2, $3, $4, 'collection', $5, $6, $7)`,
+      [projectId, endpoint.name, endpoint.path, endpoint.method, contactCollection, emptyResponse, scenarios],
+    );
+  }
 }

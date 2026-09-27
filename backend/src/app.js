@@ -3,6 +3,7 @@ import { ValidationError, NotFoundError } from './errors.js';
 import { modelRoutes } from './routes/models.js';
 import { interfaceRoutes } from './routes/interfaces.js';
 import { projectRoutes } from './routes/projects.js';
+import { collectionRoutes } from './routes/collections.js';
 import { mockRoutes } from './routes/mock.js';
 
 export function createApp(defaultProjectId) {
@@ -18,6 +19,7 @@ export function createApp(defaultProjectId) {
   app.use('/api/projects', projectRoutes(defaultProjectId));
   app.use('/api/models', modelRoutes());
   app.use('/api/interfaces', interfaceRoutes());
+  app.use('/api/collections', collectionRoutes());
   app.use('/mock', mockRoutes(defaultProjectId));
 
   app.use((req, res) => {

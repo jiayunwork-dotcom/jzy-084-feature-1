@@ -36,11 +36,24 @@ export const FIELD_TYPES = [
 
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
+export function createEmptyCollectionConfig() {
+  return {
+    collectionKey: '',
+    idField: 'id',
+    seedCount: 5,
+    // UI-only: whether the record shape references a public model or is inline
+    recordSource: 'ref',
+    record: { type: 'ref', ref: '' },
+  };
+}
+
 export function createEmptyInterface() {
   return {
     name: '',
     path: '',
     method: 'GET',
+    kind: 'stateless',
+    collection: createEmptyCollectionConfig(),
     defaultResponse: { fields: [createField('string')] },
     scenarios: [],
   };

@@ -1,14 +1,21 @@
 import * as interfaceRepo from '../db/interface-repo.js';
 import { generateNode } from './data-generator.js';
 import { selectScenario } from './scenario-matcher.js';
+import { handleCollectionRequest } from './collection-engine.js';
 import { getModelMap } from '../services/model-service.js';
 
 /**
  * Mock request dispatcher.
  *
  * Looks up the interface by method + path pattern (:param segments match any
- * single non-slash segment), evaluates scenarios in declared order, and
- * generates data from the first match (or the default response).
+ * single non-slash segment), then routes:
+ *
+ *  1. A matched conditional scenario ALWAYS wins — for both stateless and
+ *     collection interfaces — and answers with its statically generated
+ *     response without touching collection state.
+ *  2. Collection interfaces (kind = 'collection') with no scenario match are
+ *     handled by the stateful collection engine (real reads/writes).
+ *  3. Otherwise the stateless default response is generated on the fly.
  */
 
 export function pathToRegExp(pathTemplate) {
@@ -34,6 +41,11 @@ export async function findMatchingInterface(projectId, method, pathname) {
   return null;
 }
 
+function generateResponseBody(responseNode, models) {
+  // Responses are stored as { fields: [...] }; generate them as objects.
+  return generateNode({ type: 'object', fields: responseNode.fields || [] }, models);
+}
+
 /**
  * Handle an incoming mock request.
  * @returns {{ status: number, body: any, matchedScenario: string|null }}
@@ -50,15 +62,26 @@ export async function dispatch(projectId, request) {
     };
   }
 
-  const models = await getModelMap(projectId);
+  // Scenarios take precedence over both the default response and collection
+  // reads/writes: the first matching scenario short-circuits.
   const scenario = selectScenario(api.scenarios, request);
-  const responseNode = scenario ? scenario.response : api.defaultResponse;
-  // Responses are stored as { fields: [...] }; generate them as objects.
-  const body = generateNode({ type: 'object', fields: responseNode.fields || [] }, models);
+  if (scenario) {
+    const models = await getModelMap(projectId);
+    return {
+      status: scenario.statusCode && Number.isInteger(scenario.statusCode) ? scenario.statusCode : 200,
+      body: generateResponseBody(scenario.response, models),
+      matchedScenario: scenario.name,
+    };
+  }
 
+  if (api.kind === 'collection' && api.collection) {
+    return handleCollectionRequest(projectId, api, request);
+  }
+
+  const models = await getModelMap(projectId);
   return {
-    status: scenario?.statusCode && Number.isInteger(scenario.statusCode) ? scenario.statusCode : 200,
-    body,
-    matchedScenario: scenario ? scenario.name : null,
+    status: 200,
+    body: generateResponseBody(api.defaultResponse, models),
+    matchedScenario: null,
   };
 }

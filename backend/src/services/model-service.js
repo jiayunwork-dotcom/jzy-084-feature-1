@@ -102,6 +102,15 @@ export async function deleteModel(projectId, id) {
         { path: 'id', message: `模型 ${existing.name} 被接口 ${api.name} 的默认响应引用` },
       ]);
     }
+    if (
+      api.kind === 'collection' &&
+      api.collection?.record &&
+      collectRefs(api.collection.record).has(id)
+    ) {
+      throw new ValidationError('模型仍被引用，无法删除', [
+        { path: 'id', message: `模型 ${existing.name} 被接口 ${api.name} 的资源集合记录结构引用` },
+      ]);
+    }
     for (const scenario of api.scenarios) {
       if (collectRefs({ type: 'object', fields: scenario.response?.fields || [] }).has(id)) {
         throw new ValidationError('模型仍被引用，无法删除', [

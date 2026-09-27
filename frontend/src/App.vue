@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import InterfaceEditor from './components/InterfaceEditor.vue';
 import ModelEditor from './components/ModelEditor.vue';
+import CollectionConsole from './components/CollectionConsole.vue';
 import ErrorAlert from './components/ErrorAlert.vue';
 import { api } from './api/client.js';
 
@@ -103,13 +104,17 @@ async function onDeleteInterface(id) {
       <button :class="{ active: tab === 'interfaces' }" @click="tab = 'interfaces'">
         接口定义
       </button>
+      <button :class="{ active: tab === 'collections' }" @click="tab = 'collections'">
+        资源集合
+      </button>
       <button :class="{ active: tab === 'models' }" @click="tab = 'models'">
         公共模型
       </button>
       <p class="muted" style="margin-top:24px;line-height:1.6;">
         字符串字段按字段名自动推测：人名、邮箱、手机号、地址、网址、头像；<br />
         数组随机 1~5 个元素并递归生成；<br />
-        场景按声明顺序取首个命中。
+        场景按声明顺序取首个命中。<br />
+        资源集合接口记得住数据：写完能读到、删了就没了。
       </p>
     </nav>
 
@@ -127,6 +132,7 @@ async function onDeleteInterface(id) {
           @save-interface="onSaveInterface"
           @delete-interface="onDeleteInterface"
         />
+        <CollectionConsole v-else-if="tab === 'collections'" />
         <ModelEditor
           v-else
           ref="modelEditorRef"

@@ -6,8 +6,11 @@ import { ValidationError } from '../errors.js';
  */
 
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+export const INTERFACE_KINDS = ['stateless', 'collection'];
 const FIELD_TYPES = ['string', 'number', 'boolean', 'enum', 'array', 'object', 'ref'];
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const COLLECTION_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,49}$/;
+const MAX_SEED_COUNT = 50;
 
 /** Path must start with "/" and contain no "//" (and no whitespace). */
 export function validateApiPath(path, details) {
@@ -129,6 +132,88 @@ function failIfAny(details) {
   }
 }
 
+/**
+ * Collection paths: at most one `:param` segment, and it must be the last
+ * segment (e.g. /api/users or /api/users/:id).
+ */
+function validateCollectionPath(input, details) {
+  const segments = String(input.path || '').split('/').filter(Boolean);
+  const paramIndexes = segments
+    .map((segment, index) => (segment.startsWith(':') ? index : -1))
+    .filter((index) => index >= 0);
+  const lastIsParam = paramIndexes.length > 0 && paramIndexes[paramIndexes.length - 1] === segments.length - 1;
+  if (paramIndexes.length > 1 || (paramIndexes.length === 1 && !lastIsParam)) {
+    details.push({
+      path: 'path',
+      message: '资源集合路径最多包含一个路径参数，且必须位于末尾（如 /api/users/:id）',
+    });
+    return;
+  }
+  const hasParam = paramIndexes.length === 1;
+  if (input.method === 'POST' && hasParam) {
+    details.push({
+      path: 'path',
+      message: '资源集合的 POST 用于新建记录，路径不应以路径参数结尾',
+    });
+  }
+  if (['PUT', 'PATCH', 'DELETE'].includes(input.method) && !hasParam) {
+    details.push({
+      path: 'path',
+      message: `资源集合的 ${input.method} 需要定位单条记录，路径必须以 :参数 结尾（如 /api/users/:id）`,
+    });
+  }
+}
+
+function validateCollectionConfig(input, ctx, details) {
+  const collection = input.collection;
+  if (!collection || typeof collection !== 'object') {
+    details.push({ path: 'collection', message: '资源集合接口必须提供 collection 配置' });
+    return;
+  }
+  if (!COLLECTION_KEY_PATTERN.test(collection.collectionKey || '')) {
+    details.push({
+      path: 'collection.collectionKey',
+      message: '集合标识 collectionKey 必填，需以字母开头，仅含字母/数字/下划线/中划线',
+    });
+  }
+  if (!IDENTIFIER_PATTERN.test(collection.idField || '')) {
+    details.push({
+      path: 'collection.idField',
+      message: `标识字段名必须为合法标识符，当前为：${JSON.stringify(collection.idField)}`,
+    });
+  }
+  if (
+    !Number.isInteger(collection.seedCount) ||
+    collection.seedCount < 0 ||
+    collection.seedCount > MAX_SEED_COUNT
+  ) {
+    details.push({
+      path: 'collection.seedCount',
+      message: `种子记录数必须为 0~${MAX_SEED_COUNT} 的整数`,
+    });
+  }
+  const record = collection.record;
+  if (!record || typeof record !== 'object' || !['object', 'ref'].includes(record.type)) {
+    details.push({
+      path: 'collection.record',
+      message: '记录结构必须是 object（就地定义字段）或 ref（引用公共模型）',
+    });
+    return;
+  }
+  if (record.type === 'ref') {
+    if (!record.ref) {
+      details.push({ path: 'collection.record.ref', message: '记录结构必须指定引用的公共模型' });
+    } else if (!ctx.modelIds.has(record.ref)) {
+      details.push({
+        path: 'collection.record.ref',
+        message: `记录结构引用了不存在的模型：${record.ref}`,
+      });
+    }
+  } else {
+    validateFieldList(record.fields, ctx, details, 'collection.record.fields');
+  }
+}
+
 export function validateModelInput(input, modelIds) {
   const details = [];
   if (!input.name || !input.name.trim()) {
@@ -146,8 +231,20 @@ export function validateInterfaceInput(input, modelIds) {
   if (!input.name || !input.name.trim()) {
     details.push({ path: 'name', message: '接口名称不能为空' });
   }
+  const kind = input.kind || 'stateless';
+  if (!INTERFACE_KINDS.includes(kind)) {
+    details.push({ path: 'kind', message: `接口形态不合法：${input.kind}` });
+  }
   const ctx = { modelIds };
-  if (!input.defaultResponse || !Array.isArray(input.defaultResponse.fields)) {
+  if (kind === 'collection') {
+    validateCollectionConfig(input, ctx, details);
+    validateCollectionPath(input, details);
+    // The default response is unused for collection interfaces (stateful
+    // reads/writes replace it); validate it only if one was supplied.
+    if (input.defaultResponse && Array.isArray(input.defaultResponse.fields)) {
+      validateFieldList(input.defaultResponse.fields, ctx, details, 'defaultResponse.fields');
+    }
+  } else if (!input.defaultResponse || !Array.isArray(input.defaultResponse.fields)) {
     details.push({ path: 'defaultResponse.fields', message: '默认响应体字段定义缺失' });
   } else {
     validateFieldList(input.defaultResponse.fields, ctx, details, 'defaultResponse.fields');
